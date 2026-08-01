@@ -1,110 +1,123 @@
-import express from "express";
-import pool from "./db.js";
-import cors from "cors";
+import  express from "express";
+import pool from "./db.js" ;
+import cors from  "cors";
 import "dotenv/config";
-
 
 const app = express();
 const port = process.env.PORT || 3004;
 
-
 // Middleware
-app.use(express.json());
+app.use (express.json ());
 app.use(cors());
 
-
-//get all product
-
-app.get("/products" ,async (req , res) => {
+// 1. Get all products
+app.get("/products", async (req, res ) => {
     try {
         const [products] = await pool.query("SELECT * FROM products");
-        res.status(200).json(products);
+        res.status(200).json (products);
     } catch (error) {
-        console.error("Error fetching products:", error);
+        console.error("Error fetching  products:", error);
         res.status(500).json({ error: "Internal server error" });
     }
 });
 
-
-
-// Search products by brand or model name
-
+// 2. Search products by name or model
 app.get("/products/search", async (req, res) => {
     try {
-        const brand = req.query.brand; // مثال: /products/search?brand=Samsung
+        const queryStr = req.query.q; 
 
-        if (!brand) {
-        return res.status(400).json({ error: "Please provide a brand name to search for" });
+        if (!queryStr) {
+            return res.status(400).json({ error:  "Please provide a search term" });
         }
 
         const [filteredProducts] = await pool.query(
-            "SELECT * FROM products WHERE Model LIKE ?",
-            [`%${brand}%`]
+            "SELECT * FROM products WHERE Model LIKE ? OR typename LIKE ? OR category LIKE ?",
+            [`%${queryStr}%`, `%${queryStr}%`, `%${queryStr}%`] 
         );
 
         if (filteredProducts.length === 0) {
-            return res.status(404).json({ message: "No products found for this brand" });
-    }
+            return res.status(404).json({ message: "No products found" });
+        }
 
         res.status(200).json(filteredProducts);
-
     } catch (error) {
         console.error("Error searching products:", error);
         res.status(500).json({ error: "Internal server error" });
     }
 });
 
-
-//get single product
-app.get("/products/:id" , async (req , res) => {
+// 3. Get single product
+app.get ("/products/:id", async (req, res) => {
     try {
-        const productId = parseInt(req.params.id);
-        const [product] = await pool.query("SELECT * FROM products WHERE id = ?", [productId]);
+        const productId = parseInt (req.params.id);
+        const [product] =  await pool.query("SELECT * FROM products WHERE id = ?", [productId]);
         if (product.length === 0) {
-            return res.status(404).json({ error: "Product not found" });
+            return res.status (404).json({ error: "Product not found" });
         }
-        res.status(200).json(product[0]);
+        res.status(200).json (product[0]);
     } catch (error) {
         console.error("Error fetching product:", error);
-        res.status(500).json({ error: "Internal server error" });
+        res.status(500).json ({ error: "Internal server error" });
     }
 });
 
-
-
-//post creat a product 
-app.post("/product" , async (req , res) => {
+// 4.Create a product 
+app.post("/products", async (req, res) => {
     try {
-        const { price, typename, Model } = req.body;
+        const { typename, Model, category, price, quantity } = req.body;
 
-        if (!typename || !price) {
-            return res.status(400).json({ message: "Name and price are required" });
-            }
+        if (!typename || price === undefined || quantity === undefined) {
+            return res.status(400).json({ message: "Name, price, and quantity are required" });
+        }
 
-        const query = "INSERT INTO products (typename, Model, price) VALUES (?, ?, ?)";
-        const [result] = await pool.query(query, [typename, Model, price]);
+        const query = "INSERT INTO products (typename, Model, category, price, quantity) VALUES (?, ?, ?, ?, ?)";
+        const [result] = await pool.query(query, [typename, Model || "", category || "", price, quantity]);
 
         const newProduct = {
-            id: result.insertId, // الـ ID اللي الداتابيز ولدته تلقائياً
+            id: result.insertId,
             typename,
+            
             Model,
-            price
+            category,
+            price,
+            quantity
         };
-        res.status(201).json({ message: "Product Created Successfully", newProduct });
-        }
-    catch (error) {
-        console.error("Error creating product:", error);
-        res.status(500).json({ error: "Internal server error" });
-        }
+        res.status (201).json({ message: "Product Created Successfully", newProduct });
+    } catch (error) {
+        console.error ("Error creating product:", error);
+        res.status(500).json ({ error: "Internal server error" });
+    }
 });
 
+// 5.  Update a  product
+app.put("/products/:id", async (req, res) => {
+    try  {
+        const  productId = parseInt (req.params.id);
+        const { typename, Model, category, price, quantity } = req.body;
 
+        const [existing] = await pool.query ("SELECT * FROM products WHERE id = ?", [productId]);
+        if (existing.length === 0)
+        {
+            return res.status (404).json ({ error: "Product not found" });
+        }
 
-// delete a single product
+        const query = "UPDATE products SET typename = ?, Model = ?, category = ?, price = ?, quantity = ? WHERE id = ?";
+        await pool.query(query, [typename ,Model, category, price ,quantity , productId]);
 
+        res.status(200).json({ 
+            message: "Product updated successfully", 
+            product: { id: productId, typename ,Model, category,  price, quantity } 
+        });
+    } catch (error) {
+        console.error ("Error updating product:", error);
+        res.status(500).json ({ error: "Internal server error" });
+    }
+});
+
+// 6. Delete a single product
 app.delete("/products/:id", async (req, res) => {
     try {
-        const productId = parseInt(req.params.id); // 
+        const productId = parseInt(req.params.id);
 
         const [existing] = await pool.query("SELECT * FROM products WHERE id = ?", [productId]);
         if (existing.length === 0) {
@@ -112,55 +125,17 @@ app.delete("/products/:id", async (req, res) => {
         }
 
         await pool.query("DELETE FROM products WHERE id = ?", [productId]);
-        res.status(200).json({ message: "Product deleted successfully" });
+         res.status(200).json({ message: "Product deleted successfully" });
+    } catch (error)  {
+         console.error("Error deleting product:", error);
+        res.status(500).json ({ error: "Internal server error" });
     }
-    catch (error) {
-        console.error("Error deleting product:", error);
-        res.status(500).json({ error: "Internal server error" });
-    }
 });
 
-
-
-// update a single product
-app.put("/products/:id", async (req, res) => {
-    try {
-        const productId = parseInt(req.params.id);
-        const { price, typename, Model } = req.body;
-
-        if (!price) {
-            return res.status(400).json({ error: "Price is required" });
-        }
-
-
-        const [existing] = await pool.query("SELECT * FROM products WHERE id = ?", [productId]);
-        if (existing.length === 0) {
-            return res.status(404).json({ error: "Product not found" });
-        }
-
-        const query = "UPDATE products SET typename = ?, Model = ?, price = ? WHERE id = ?";
-        await pool.query(query, [typename, Model, price, productId]);
-
-        res.status(200).json({ 
-            message: "Product updated successfully", 
-            product: { id: productId, typename, Model, price } 
-        });
-        } 
-    catch (error) {
-        console.error("Error updating product:", error);
-        res.status(500).json({ error: "Internal server error" });
-        }
+app.get ("/", (req, res) => {
+    res.send ("Server Health is good"  );
 });
 
-
-
-
-
-app.listen(port,() => {
-    console.log(`HOST:http://localhost:${port}`);
-});
-
-
-app.get("/" , (req , res) => {
-    res.send("Server Health is good");
+app.listen (port, () => {
+    console.log (`HOST:http://localhost:${port}`);
 });
