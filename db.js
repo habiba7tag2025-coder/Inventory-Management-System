@@ -6,11 +6,11 @@ const db = new sqlite3.Database(dbPath, (err) => {
     if (err) {
         console.error("Error opening SQLite database", err.message);
     } else {
-        console.log("Connected to the SQLite local database.");
+        console.log("Connected to the SQLite local database");
     }
 });
 
-// إنشاء الجدول والتأكد من إدخال البيانات التجريبية
+//  جدول البيانات التجريبية
 db.serialize(() => {
     db.run(`
         CREATE TABLE IF NOT EXISTS products (
